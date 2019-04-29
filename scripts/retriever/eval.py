@@ -133,6 +133,7 @@ if __name__ == '__main__':
     )
     answers_docs = zip(answers, closest_docs)
 
+
     # define processes
     tok_class = tokenizers.get_class(args.tokenizer)
     tok_opts = {}

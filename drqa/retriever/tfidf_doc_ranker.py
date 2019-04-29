@@ -58,6 +58,29 @@ class TfidfDocRanker(object):
         """
         spvec = self.text2spvec(query)
         res = spvec * self.doc_mat
+        #print(query)
+        #print(spvec)
+        #print(spvec.shape)
+
+        #print(self.doc_mat[10])
+        #print(self.doc_mat[100])
+        #print(self.doc_mat.shape)
+        #print(self.doc_mat[0,:])
+        #print(self.doc_mat.nnz)
+
+        #print('ngrams: %d'%(self.ngrams))
+        #print('hash_size: %d'%(self.hash_size))
+        #print('num_docs: %d'%(self.num_docs))
+        #print('doc_freqs shape: %s'%(self.doc_freqs.shape))
+        #print(self.doc_freqs.shape)
+        #print(self.doc_dict)
+
+        #for idx in range(self.doc_mat.nnz):
+        #    print(self.doc_mat[idx])
+
+        #print(res)
+
+        #print(res.shape)
 
         if len(res.data) <= k:
             o_sort = np.argsort(-res.data)
