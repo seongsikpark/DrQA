@@ -26,7 +26,7 @@ logger.addHandler(console)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('dataset', type=str)
-parser.add_argument('--out-dir', type=str, default='/tmp',
+parser.add_argument('--out-dir', type=str, default='./tmp',
                     help=("Directory to write prediction file to "
                           "(<dataset>-<model>-pipeline.preds)"))
 parser.add_argument('--reader-model', type=str, default=None,
