@@ -108,18 +108,30 @@ for line in open(args.dataset):
     data = json.loads(line)
     queries.append(data['question'])
 
+# sspark
+queries=queries[0]
+
+print(queries)
+
 model = os.path.splitext(os.path.basename(args.reader_model or 'default'))[0]
 basename = os.path.splitext(os.path.basename(args.dataset))[0]
 outfile = os.path.join(args.out_dir, basename + '-' + model + '-pipeline.preds')
 
+if not os.path.isdir(args.out_dir):
+    os.mkdir(args.out_dir)
+
 logger.info('Writing results to %s' % outfile)
 with open(outfile, 'w') as f:
-    batches = [queries[i: i + args.predict_batch_size]
-               for i in range(0, len(queries), args.predict_batch_size)]
+    batches = [queries[i: i + args.predict_batch_size] for i in range(0, len(queries), args.predict_batch_size)]
+
+    print(args.predict_batch_size)
+    print(batches)
+    print(len(batches))
+    if len(batches)==1 :
+        batches = [batches]
     for i, batch in enumerate(batches):
-        logger.info(
-            '-' * 25 + ' Batch %d/%d ' % (i + 1, len(batches)) + '-' * 25
-        )
+        print(batch)
+        logger.info('-' * 25 + ' Batch %d/%d ' % (i + 1, len(batches)) + '-' * 25)
         predictions = DrQA.process_batch(
             batch,
             n_docs=args.n_docs,

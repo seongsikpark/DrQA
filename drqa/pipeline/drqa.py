@@ -207,11 +207,36 @@ class DrQA(object):
             )
         all_docids, all_doc_scores = zip(*ranked)
 
+        print(all_docids)
+        print(all_doc_scores)
+
         # Flatten document ids and retrieve text from database.
         # We remove duplicates for processing efficiency.
         flat_docids = list({d for docids in all_docids for d in docids})
         did2didx = {did: didx for didx, did in enumerate(flat_docids)}
+
+
+        #print(self.processes.map(fetch_text, flat_docids[0]))
+
         doc_texts = self.processes.map(fetch_text, flat_docids)
+
+        #print(self.processes.map(fetch_text, 'Super Bowl'))
+        #print(self.processes.map(fetch_text, 'NFL on CBS'))
+
+        print(len(doc_texts))
+
+        #print(doc_texts[0])
+        #print(doc_texts[1])
+        #print(doc_texts[2])
+        #print(doc_texts[3])
+        #print(doc_texts[4])
+
+
+        tmp_text = self.processes.map(fetch_text, ['Super Bowl 50'])
+        print(tmp_text[0])
+
+
+
 
         # Split and flatten documents. Maintain a mapping from doc (index in
         # flat list) to split (index in flat list).

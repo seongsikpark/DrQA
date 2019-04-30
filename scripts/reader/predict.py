@@ -31,7 +31,7 @@ parser.add_argument('--model', type=str, default=None,
 parser.add_argument('--embedding-file', type=str, default=None,
                     help=('Expand dictionary to use all pretrained '
                           'embeddings in this file.'))
-parser.add_argument('--out-dir', type=str, default='/tmp',
+parser.add_argument('--out-dir', type=str, default='./tmp',
                     help=('Directory to write prediction file to '
                           '(<dataset>-<model>.preds)'))
 parser.add_argument('--tokenizer', type=str, default=None,
@@ -86,25 +86,33 @@ with open(args.dataset) as f:
                 examples.append((context, qa['question']))
 
 results = {}
+results_topk = {}
 for i in tqdm(range(0, len(examples), args.batch_size)):
     predictions = predictor.predict_batch(
         examples[i:i + args.batch_size], top_n=args.top_n
     )
     for j in range(len(predictions)):
         # Official eval expects just a qid --> span
-        if args.official:
-            results[qids[i + j]] = predictions[j][0][0]
-
+        #if args.official:
+        #    results[qids[i + j]] = predictions[j][0][0]
         # Otherwise we store top N and scores for debugging.
-        else:
-            results[qids[i + j]] = [(p[0], float(p[1])) for p in predictions[j]]
+        #else:
+        #    results_topk[qids[i + j]] = [(p[0], float(p[1])) for p in predictions[j]]
+
+        results[qids[i + j]] = predictions[j][0][0]
+        results_topk[qids[i + j]] = [(p[0], float(p[1])) for p in predictions[j]]
 
 model = os.path.splitext(os.path.basename(args.model or 'default'))[0]
 basename = os.path.splitext(os.path.basename(args.dataset))[0]
 outfile = os.path.join(args.out_dir, basename + '-' + model + '.preds')
+outfile_topk = os.path.join(args.out_dir, basename + '-' + model + '_topk.preds')
 
 logger.info('Writing results to %s' % outfile)
 with open(outfile, 'w') as f:
     json.dump(results, f)
+
+with open(outfile_topk, 'w') as f:
+    json.dump(results_topk, f)
+
 
 logger.info('Total time: %.2f' % (time.time() - t0))
