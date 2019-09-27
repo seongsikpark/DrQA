@@ -83,7 +83,7 @@ def count(ngram, hash_size, doc_id):
     return row, col, data
 
 
-def get_count_matrix(args, db, db_opts):
+def get_count_matrix(args, db, mat_format, db_opts):
     """Form a sparse word to document count matrix (inverted index).
 
     M[i, j] = # times word i appears in document j.
@@ -119,9 +119,14 @@ def get_count_matrix(args, db, db_opts):
     workers.join()
 
     logger.info('Creating sparse matrix...')
-    count_matrix = sp.csr_matrix(
-        (data, (row, col)), shape=(args.hash_size, len(doc_ids))
-    )
+
+    if mat_format=='csc':
+        count_matrix = sp.csc_matrix((data, (row, col)), shape=(args.hash_size, len(doc_ids)))
+    else:
+        count_matrix = sp.csr_matrix((data, (row, col)), shape=(args.hash_size, len(doc_ids)))
+
+    #print(len(count_matrix.indptr))
+
     count_matrix.sum_duplicates()
     return count_matrix, (DOC2IDX, doc_ids)
 
@@ -131,7 +136,7 @@ def get_count_matrix(args, db, db_opts):
 # ------------------------------------------------------------------------------
 
 
-def get_tfidf_matrix(cnts):
+def get_tfidf_matrix(cnts, mat_format):
     """Convert the word count matrix into tfidf one.
 
     tfidf = log(tf + 1) * log((N - Nt + 0.5) / (Nt + 0.5))
@@ -142,7 +147,7 @@ def get_tfidf_matrix(cnts):
     Ns = get_doc_freqs(cnts)
     idfs = np.log((cnts.shape[1] - Ns + 0.5) / (Ns + 0.5))
     idfs[idfs < 0] = 0
-    idfs = sp.diags(idfs, 0)
+    idfs = sp.diags(idfs, 0,format=mat_format)
     tfs = cnts.log1p()
     tfidfs = idfs.dot(tfs)
     return tfidfs
@@ -176,15 +181,34 @@ if __name__ == '__main__':
                               "(e.g. 'corenlp')"))
     parser.add_argument('--num-workers', type=int, default=None,
                         help='Number of CPU processes (for tokenizing, etc)')
+
+    parser.add_argument('--mat-format', type=str, default='csr',
+                        help='sparse-matrix format (csr or csc)')
+
     args = parser.parse_args()
 
+
+
+    #mat_format = args.mat_format
+    if args.mat_format=='csc':
+        mat_format='csc'
+    else:
+        mat_format='csr'
+
+    if not(mat_format=='csr' or mat_format=='csc'):
+        print('not supported mat format: %s'%(mat_format))
+        assert False
+
+
     logging.info('Counting words...')
-    count_matrix, doc_dict = get_count_matrix(
-        args, 'sqlite', {'db_path': args.db_path}
-    )
+    count_matrix, doc_dict = get_count_matrix(args, 'sqlite', mat_format, {'db_path': args.db_path})
+
+    #print(len(count_matrix.indptr))
 
     logger.info('Making tfidf vectors...')
-    tfidf = get_tfidf_matrix(count_matrix)
+    tfidf = get_tfidf_matrix(count_matrix, mat_format)
+
+    #print(len(tfidf.indptr))
 
     logger.info('Getting word-doc frequencies...')
     freqs = get_doc_freqs(count_matrix)
@@ -192,14 +216,24 @@ if __name__ == '__main__':
     basename = os.path.splitext(os.path.basename(args.db_path))[0]
     basename += ('-tfidf-ngram=%d-hash=%d-tokenizer=%s' %
                  (args.ngram, args.hash_size, args.tokenizer))
+    if mat_format=='csc':
+        basename+='-csc'
     filename = os.path.join(args.out_dir, basename)
 
     logger.info('Saving to %s.npz' % filename)
+
+
     metadata = {
         'doc_freqs': freqs,
         'tokenizer': args.tokenizer,
         'hash_size': args.hash_size,
         'ngram': args.ngram,
-        'doc_dict': doc_dict
+        'doc_dict': doc_dict,
+        'mat_format': args.mat_format
     }
-    retriever.utils.save_sparse_csr(filename, tfidf, metadata)
+
+    if mat_format=='csr':
+        retriever.utils.save_sparse_csr(filename, tfidf, metadata)
+    elif mat_format=='csc':
+        retriever.utils.save_sparse_csc(filename, tfidf, metadata)
+

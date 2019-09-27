@@ -17,6 +17,11 @@ from . import utils
 from . import DEFAULTS
 from .. import tokenizers
 
+#
+import matplotlib.pyplot as plt
+
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,9 +38,26 @@ class TfidfDocRanker(object):
         """
         # Load from disk
         tfidf_path = tfidf_path or DEFAULTS['tfidf_path']
-        logger.info('Loading %s' % tfidf_path)
-        matrix, metadata = utils.load_sparse_csr(tfidf_path)
-        self.doc_mat = matrix
+
+        if tfidf_path.endswith('.npz'):
+            f_suffix_npz=True
+
+            logger.info('Loading: %s' % tfidf_path)
+            #matrix, metadata = utils.load_sparse_csr(tfidf_path)
+            matrix, metadata = utils.load_sparse(tfidf_path)
+            logger.info('Loading end: %s end' % tfidf_path)
+
+            self.doc_mat = matrix
+        else:
+            f_suffix_npz=False
+
+            metadata = utils.load_sparse_meta(tfidf_path)
+
+            self.doc_mat = None
+
+        self.tfidf_path = tfidf_path
+        self.mat_format = metadata['mat_format'] if 'mat_format' in metadata else None
+
         self.ngrams = metadata['ngram']
         self.hash_size = metadata['hash_size']
         self.tokenizer = tokenizers.get_class(metadata['tokenizer'])()
@@ -43,6 +65,20 @@ class TfidfDocRanker(object):
         self.doc_dict = metadata['doc_dict']
         self.num_docs = len(self.doc_dict[0])
         self.strict = strict
+
+        #
+        self.f_suffix_npz=f_suffix_npz
+
+
+        #print('test')
+        #print(len(matrix.indptr))
+
+        print(self.doc_freqs.shape)
+        print(np.max(self.doc_freqs))
+        print(np.mean(self.doc_freqs))
+        print(np.min(self.doc_freqs))
+
+
 
     def get_doc_index(self, doc_id):
         """Convert doc_id --> doc_index"""
@@ -57,7 +93,36 @@ class TfidfDocRanker(object):
         in tfidf weighted word vector space.
         """
         spvec = self.text2spvec(query)
-        res = spvec * self.doc_mat
+
+        #print('spvec')
+        #print(spvec)
+
+        if self.mat_format=='csc':
+            #res = spvec.transpose() * self.doc_mat
+            #res = self.doc_mat
+            #res = self.doc_mat.dot(spvec)
+            #res = spvec * self.doc_mat
+            #res = spvec.dot(self.doc_mat)
+            #res = self.doc_mat.dot(spvec)
+            #res = self.doc_mat.multiply(spvec)
+
+            #res = self.doc_mat.multiply(spvec).sum(0)
+            #res = self.doc_mat.multiply(spvec)
+            #res = res.sum(0)
+            #res = spvec * self.doc_mat
+            #print(res.shape)
+
+            res = spvec * self.doc_mat
+        else:
+
+            if self.f_suffix_npz:
+                # original
+                doc_mat = self.doc_mat
+            else:
+                doc_mat = utils.load_sparse_idx(self.tfidf_path,spvec)
+            res = spvec * doc_mat
+
+
         #print(query)
         #print(spvec)
         #print(spvec.shape)
@@ -73,7 +138,68 @@ class TfidfDocRanker(object):
         #print('num_docs: %d'%(self.num_docs))
         #print('doc_freqs shape: %s'%(self.doc_freqs.shape))
         #print(self.doc_freqs.shape)
-        #print(self.doc_dict)
+        #print(self.doc_dict[0])
+        #print(len(self.doc_freqs))
+
+#        print("non zero")
+#        print(np.count_nonzero(self.doc_freqs))
+#
+#        print("total sum")
+#        print(np.sum(self.doc_freqs))
+#
+#        print("max")
+#        print(np.max(self.doc_freqs))
+#
+#        print("mean")
+#        print(np.mean(self.doc_freqs))
+#
+#        print("min")
+#        print(np.min(self.doc_freqs))
+#
+#        print("std")
+#        print(np.std(self.doc_freqs))
+
+        ##
+        #print(self.doc_mat.shape)
+        #print("max")
+        #print(np.max(self.doc_mat))
+        #print("mean")
+        #print(np.mean(self.doc_mat))
+        #print("min")
+        #print(np.min(self.doc_mat))
+        #print("std")
+        #print(np.std(self.doc_mat))
+        #print("non_zero")
+        #print(np.count_nonzero(self.doc_mat))
+
+        #Ns = self.doc_freqs
+        #dfs = np.log((Ns + 0.5)/(self.num_docs - Ns + 0.5))
+        #dfs[dfs < 0] = 0
+
+        # TF-IDF*IDF
+        #data = np.multiply(self.doc_mat, dfs)
+        #print('TF max')
+        #print(np.max(data))
+
+        #sum_0=np.sum(self.doc_mat,axis=0)
+        #print(np.sum(self.doc_mat,axis=1))
+
+        #print(sum_0.shape)
+
+        #print(self.doc_dict.shape())
+        #print(len(self.doc_dict[0]))
+        #print(len(self.doc_dict[1]))
+
+        #num_zero = len(self.doc_freqs)-np.count_nonzero(self.doc_freqs)
+        #print(num_zero)
+        #print(np.count_nonzero(self.doc_freqs)/len(self.doc_freqs))
+
+        #print(self.doc_freqs)
+
+
+
+
+
 
         #for idx in range(self.doc_mat.nnz):
         #    print(self.doc_mat[idx])
@@ -90,6 +216,8 @@ class TfidfDocRanker(object):
 
         doc_scores = res.data[o_sort]
         doc_ids = [self.get_doc_id(i) for i in res.indices[o_sort]]
+
+
         return doc_ids, doc_scores
 
     def batch_closest_docs(self, queries, k=1, num_workers=None):
@@ -114,14 +242,28 @@ class TfidfDocRanker(object):
         """
         # Get hashed ngrams
         words = self.parse(utils.normalize(query))
+
+        print(len(words))
+
+        #words = self.parse(query)
         wids = [utils.hash(w, self.hash_size) for w in words]
+
+        #print(query)
+        #print(len(words))
+        #print(words)
+        #print(wids)
 
         if len(wids) == 0:
             if self.strict:
                 raise RuntimeError('No valid word in: %s' % query)
             else:
                 logger.warning('No valid word in: %s' % query)
-                return sp.csr_matrix((1, self.hash_size))
+
+                if self.mat_format=='csc':
+                    ret = sp.csc_matrix((1, self.hash_size))
+                else:
+                    ret = sp.csr_matrix((1, self.hash_size))
+                return ret
 
         # Count TF
         wids_unique, wids_counts = np.unique(wids, return_counts=True)
@@ -132,13 +274,30 @@ class TfidfDocRanker(object):
         idfs = np.log((self.num_docs - Ns + 0.5) / (Ns + 0.5))
         idfs[idfs < 0] = 0
 
+
         # TF-IDF
         data = np.multiply(tfs, idfs)
 
-        # One row, sparse csr matrix
-        indptr = np.array([0, len(wids_unique)])
-        spvec = sp.csr_matrix(
-            (data, wids_unique, indptr), shape=(1, self.hash_size)
-        )
+
+        if self.mat_format=='csc':
+            # One col, sparse csc matrix
+            indptr = np.array([0,len(wids_unique)])
+            print(wids_counts)
+            print(wids_unique)
+            print(indptr)
+            #indptr = np.array([0, self.num_docs])
+            spvec = sp.csc_matrix((data, wids_unique, indptr), shape=(self.hash_size, 1))
+            #spvec = sp.csc_matrix((data, wids_unique, indptr), shape=(1, self.hash_size))
+            #spvec = sp.csc_matrix((data, 0, wids_unique), shape=(1, self.hash_size))
+            #spvec = sp.csc_matrix(data, (0,wids_unique), shape=(1,self.hash_size))
+            #spvec = sp.csc_matrix((data, wids_unique, indptr), shape=(self.num_docs, 1))
+
+            #indptr = np.array([0, len(wids_unique)])
+            #spvec = sp.csr_matrix((data, wids_unique, indptr), shape=(1, self.hash_size))
+        else:
+            # One row, sparse csr matrix
+            indptr = np.array([0, len(wids_unique)])
+            spvec = sp.csr_matrix((data, wids_unique, indptr), shape=(1, self.hash_size))
+
 
         return spvec
